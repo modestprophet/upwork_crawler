@@ -23,7 +23,7 @@ DB_URL = {'drivername': 'postgresql+psycopg2',
           'port': 5432,
           'database': 'plumbus'}
 
-input_file = "/home/freesample/Downloads/chicago_crime_stats_2001_to_Present_20240706.csv"
+# input_file = "/home/freesample/Downloads/chicago_crime_stats_2001_to_Present_20240706.csv"
 schema = None  #  "projects"  #  use None to create table in 'Public' schema
 table_name = "chicago_crime_stats_test"
 
