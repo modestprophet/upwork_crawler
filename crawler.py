@@ -3,7 +3,7 @@ import cloudscraper
 from data_models import JobsModel
 from bs4 import BeautifulSoup
 from sqlalchemy import create_engine, URL
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.orm import sessionmaker
 
 
 def fetch_url(url, browser=None):
@@ -15,6 +15,10 @@ def fetch_url(url, browser=None):
         print("Retrying!")
         response = scraper.get(url)
         print(response.status_code)
+        if response.status_code == 403:
+            pass
+            # TODO:  maybe 403 is for 'private' listings? (i.e., must be signed in to upwork to view posting)
+            # return None
         if response.status_code == 200:
             print("Retry successful!")
     return response
@@ -26,15 +30,13 @@ def parse_job_links(response):
     job_soup = soup.find_all('a', class_='up-n-link', attrs={'data-test': 'job-tile-title-link'})
     for link in job_soup:
         href = link.get('href')
+        href = f"https://www.upwork.com{href.split('?')[0]}" # strip text after the ? in job URLs
         job_links.append(href)
     return job_links
 
 
 def parse_job(response, url):
-    out_dict = dict
     soup = BeautifulSoup(response.text, 'html.parser')
-    # look at a sample posting and parse the soup for various objects like description and hourly price
-
     out_dict = {
         "url": url,
         "title": parse_job_title(soup),
@@ -47,11 +49,10 @@ def parse_job(response, url):
 
 
 def parse_job_title(soup):
-    # TODO: what happens when nothing is found?
-    title = soup.find('h4').get_text()
+    title = soup.find('h4')
     if not title:
         print("No job title section found")
-    return title
+    return title.get_text()
 
 def parse_job_description(soup):
     # job description
@@ -73,7 +74,6 @@ def parse_job_description(soup):
 
 def parse_job_budget(soup):
     # budget amount
-    budget = ''
     p_tags = soup.find_all('p', class_='m-0')
     if len(p_tags) <= 0 :
         budget = "No budget info found in post"
@@ -98,14 +98,10 @@ def parse_job_budget(soup):
     return budget
 
 def write_to_db(session, data_dict):
+    # TODO:  what do when zero rows?
     for row in data_dict:
-        # Create a new Job object
-        # job = JobsModel(job_title=job_title, job_description=job_description, budget=budget)
         row_out = JobsModel(**row)
-        # Add the job to the session
         session.add(row_out)
-
-    # Commit the changes to the database
     try:
         session.commit()
         print("Data inserted successfully")
@@ -113,11 +109,9 @@ def write_to_db(session, data_dict):
         session.rollback()
         print(f"Error inserting data: {e}")
 
-
-
 def main():
     # # DB stuff
-    engine = create_engine(URL.create(**settings.DB_URL), echo=True)
+    engine = create_engine(URL.create(**settings.DB_URL))
     Session = sessionmaker(bind=engine)
     session = Session()
     JobsModel().__table__.create(bind=engine, checkfirst=True)
@@ -126,25 +120,28 @@ def main():
     for url in settings.urls:
         job_search_raw = fetch_url(url, settings.browser_headers)
         links_set.update(parse_job_links(job_search_raw))
+        print(f"Link set size: {len(links_set)}")
     print(links_set)
 
+    # Query existing URLs from the database
+    existing_urls = set(url.url for url in session.query(JobsModel.url).all())
+    # Filter the list to keep only URLs that don't exist in the database
+    new_urls = [url for url in links_set if url not in existing_urls]
+
     parsed_jobs = []
-    for job in links_set:
-        # strip text after the ? in job URLs
-        job_url = f"https://www.upwork.com{job.split('?')[0]}"
+    for job_url in new_urls:
         print(job_url)
-        parsed_job = parse_job(fetch_url(job_url), job_url)
+        raw_job = fetch_url(job_url)
+        # if raw_job is None:
+        #     print(f"No data from fetch.  Skipping:  {job_url}")
+        #     continue
+        parsed_job = parse_job(raw_job, job_url)
         parsed_jobs.append(parsed_job)
-        if len(parsed_jobs) > 2:
+        if len(parsed_jobs) > 50:
             break
 
     write_to_db(session, parsed_jobs)
-
-
-
-    # Close the session
     session.close()
-
 
 
 if __name__ == '__main__':
