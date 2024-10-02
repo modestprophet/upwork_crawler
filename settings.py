@@ -17,15 +17,9 @@ multipass.auth.approle.login(VAULT_ROLE_ID, VAULT_SECRET_ID)
 
 # app db
 DB_URL = {'drivername': 'postgresql+psycopg2',
-          'username': multipass.read('secret/etl/db/user')['data']['user'],
-          'password': multipass.read('secret/etl/db/password')['data']['password'],
+          'username': multipass.read('secret/etl/consulting/db/user')['data']['user'],
+          'password': multipass.read('secret/etl/consulting/db/password')['data']['password'],
           'host': '10.0.20.18',
           'port': 5432,
           'database': 'plumbus'}
 
-# input_file = "/home/freesample/Downloads/chicago_crime_stats_2001_to_Present_20240706.csv"
-schema = None  #  "projects"  #  use None to create table in 'Public' schema
-table_name = "chicago_crime_stats_test"
-
-batch_size = 100000
-datatype_detection_sample_size = 10000

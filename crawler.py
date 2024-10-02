@@ -1,7 +1,7 @@
-import requests
+import settings
 import cloudscraper
 from bs4 import BeautifulSoup
-from tensorflow.python.ops.numpy_ops.np_math_ops import append
+
 
 urls = ['http://www.upwork.com/nx/search/jobs/?nbs=1&per_page=50&q=tableau%20dashboard',
         'http://www.upwork.com/nx/search/jobs/?nbs=1&q=tableau%20developer&page=1&per_page=50']
@@ -62,22 +62,10 @@ def parse_job(response):
             job_description_text += str(element)
 
     # budget amount
-    # budget_amounts = soup.find_all('div', {'data-test': 'BudgetAmount'})
-    #
-    # # Extract the numeric values
-    # values = []
-    # for amount in budget_amounts:
-    #     value = amount.find('strong').text.strip()
-    #     numeric_value = value.replace('$', '').replace('.00', '')
-    #     values.append(numeric_value)
-    #
-    # # Join the values with a hyphen
-    # budget_amount = '-'.join(values)
-
-    # Find all <p> tags with class 'm-0'
+    budget = ''
     p_tags = soup.find_all('p', class_='m-0')
     if len(p_tags) <= 0 :
-        print("No p_tags found for this job")
+        budget = "No budget info found in post"
         return
 
     # Extract amounts from <strong> tags within those <p> tags
@@ -90,13 +78,13 @@ def parse_job(response):
 
     # Join the values with a hyphen if there are exactly two values
     if len(values) == 2:
-        result = f"Hourly:  {values[0]}-{values[1]}"
+        budget = f"Hourly:  {values[0]}-{values[1]}"
     elif len(values) == 1:
-        result = f"Total budget:  {values[0]}"
+        budget = f"Total budget:  {values[0]}"
     else:
-        result = "No budget values found"
+        budget = "No budget values found"
 
-    print(result)
+    print(budget)
 
 
 
