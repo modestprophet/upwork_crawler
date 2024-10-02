@@ -5,9 +5,10 @@ from sendemail import email_main
 from bs4 import BeautifulSoup
 from sqlalchemy import create_engine, URL
 from sqlalchemy.orm import sessionmaker
+from typing import Optional
 
 
-def fetch_url(url, browser=None):
+def fetch_url(url: str, browser: dict = None) -> Optional[cloudscraper.CloudScraper]:
     scraper = cloudscraper.create_scraper(browser=browser)
     response = scraper.get(url)
     # TODO:  need a way to handle 403 errors.  Ignore 403 jobs or store and retry?
@@ -25,7 +26,7 @@ def fetch_url(url, browser=None):
     return response
 
 
-def parse_job_links(response):
+def parse_job_links(response: cloudscraper.CloudScraper) -> list[str]:
     job_links = []
     soup = BeautifulSoup(response.text, 'html.parser')
     job_soup = soup.find_all('a', class_='up-n-link', attrs={'data-test': 'job-tile-title-link'})
@@ -36,7 +37,7 @@ def parse_job_links(response):
     return job_links
 
 
-def parse_job(response, url):
+def parse_job(response: cloudscraper.CloudScraper, url: str) -> dict:
     soup = BeautifulSoup(response.text, 'html.parser')
     out_dict = {
         "url": url,
@@ -49,7 +50,7 @@ def parse_job(response, url):
     return out_dict
 
 
-def parse_job_title(soup):
+def parse_job_title(soup: BeautifulSoup) -> str:
     title = soup.find('h4')
     if not title:
         print("No job title section found")
@@ -78,7 +79,7 @@ def parse_job_budget(soup):
     p_tags = soup.find_all('p', class_='m-0')
     if len(p_tags) <= 0 :
         budget = "No budget info found in post"
-        return
+        return budget
 
     # Extract amounts from <strong> tags within those <p> tags
     values = []
@@ -88,14 +89,12 @@ def parse_job_budget(soup):
             amount = strong_tag.get_text(strip=True).replace('$', '').strip()
             values.append(amount)
 
-    # Join the values with a hyphen if there are exactly two values
     if len(values) == 2:
         budget = f"Hourly:  {values[0]}-{values[1]}"
     elif len(values) == 1:
         budget = f"Total budget:  {values[0]}"
     else:
         budget = "No budget values found"
-
     return budget
 
 def write_to_db(session, data_dict):
