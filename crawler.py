@@ -1,16 +1,10 @@
 import settings
 import cloudscraper
+from data_models import JobsModel
 from bs4 import BeautifulSoup
-
-
-urls = ['http://www.upwork.com/nx/search/jobs/?nbs=1&per_page=50&q=tableau%20dashboard',
-        'http://www.upwork.com/nx/search/jobs/?nbs=1&q=tableau%20developer&page=1&per_page=50']
-
-browser_headers = {
-    'browser': 'chrome',
-    'platform': 'windows',
-    'desktop': True
-}
+from sqlalchemy import create_engine, URL
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 
 
 def fetch_url(url, browser=None):
@@ -19,12 +13,11 @@ def fetch_url(url, browser=None):
     # TODO:  need a way to handle 403 errors.  Ignore 403 jobs or store and retry?
     # retry once if not 200
     if response.status_code != 200:
-        scraper = cloudscraper.create_scraper(browser=browser)
-        response = scraper.get(url)
         print("Retrying!")
+        response = scraper.get(url)
+        print(response.status_code)
         if response.status_code == 200:
             print("Retry successful!")
-    print(response.status_code)
     return response
 
 
@@ -38,14 +31,30 @@ def parse_job_links(response):
     return job_links
 
 
-def parse_job(response):
+def parse_job(response, url):
     out_dict = dict
     soup = BeautifulSoup(response.text, 'html.parser')
     # look at a sample posting and parse the soup for various objects like description and hourly price
 
-    # job title
-    job_title = soup.find('h4').get_text()
+    out_dict = {
+        "url": url,
+        "title": parse_job_title(soup),
+        "description": parse_job_description(soup),
+        "budget": parse_job_budget(soup),
+        "status": "new"
+    }
 
+    return out_dict
+
+
+def parse_job_title(soup):
+    # TODO: what happens when nothing is found?
+    title = soup.find('h4').get_text()
+    if not title:
+        print("No job title section found")
+    return title
+
+def parse_job_description(soup):
     # job description
     job_description_element = soup.find('p', class_='text-body-sm')
     if not job_description_element:
@@ -61,6 +70,9 @@ def parse_job(response):
         else:
             job_description_text += str(element)
 
+    return job_description_text
+
+def parse_job_budget(soup):
     # budget amount
     budget = ''
     p_tags = soup.find_all('p', class_='m-0')
@@ -84,31 +96,52 @@ def parse_job(response):
     else:
         budget = "No budget values found"
 
-    print(budget)
+    return budget
 
+def write_to_db():
+    # # DB stuff
+    engine = create_engine(URL.create(**settings.DB_URL))
+    Base = declarative_base()
 
+    # Create the tables in the database
+    Base.metadata.create_all(engine)
 
-    # Extract
-    return out_dict
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    # Create a new Job object
+    # job = JobsModel(job_title=job_title, job_description=job_description, budget=budget)
+    job = JobsModel()
 
-# # DB stuff
-# engine = create_engine(URL.create(**settings.DB_URL))
-# Session = sessionmaker(bind=engine)
-# Base = declarative_base()
-# table_name = settings.table_name
+    # Add the job to the session
+    session.add(job)
+
+    # Commit the changes to the database
+    try:
+        session.commit()
+        print("Data inserted successfully")
+    except Exception as e:
+        session.rollback()
+        print(f"Error inserting data: {e}")
+
+    # Close the session
+    session.close()
+
 
 def main():
     links_set = set()
-    for url in urls:
-        job_search_raw = fetch_url(url, browser_headers)
+    for url in settings.urls:
+        job_search_raw = fetch_url(url, settings.browser_headers)
         links_set.update(parse_job_links(job_search_raw))
     print(links_set)
 
+    parsed_jobs = []
     for job in links_set:
         # strip text after the ? in job URLs
         job_url = f"https://www.upwork.com{job.split('?')[0]}"
         print(job_url)
-        parsed_job = parse_job(fetch_url(job_url))
+        parsed_job = parse_job(fetch_url(job_url), job_url)
+        parsed_jobs.append(parsed_job)
+
 
 
 
