@@ -104,13 +104,13 @@ def write_to_db(session, data_dict):
         session.add(row_out)
     try:
         session.commit()
-        print("Data inserted successfully")
+        print(f"{len(data_dict)} jobs added after parsing.")
     except Exception as e:
         session.rollback()
         print(f"Error inserting data: {e}")
 
 def main():
-    # # DB stuff
+    # DB stuff
     engine = create_engine(URL.create(**settings.DB_URL))
     Session = sessionmaker(bind=engine)
     session = Session()
@@ -120,8 +120,7 @@ def main():
     for url in settings.urls:
         job_search_raw = fetch_url(url, settings.browser_headers)
         links_set.update(parse_job_links(job_search_raw))
-        print(f"Link set size: {len(links_set)}")
-    print(links_set)
+    print(f"{len(links_set)} jobs found in {len(settings.urls)} queries.")
 
     # Query existing URLs from the database
     existing_urls = set(url.url for url in session.query(JobsModel.url).all())
