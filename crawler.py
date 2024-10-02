@@ -1,6 +1,7 @@
 import settings
 import cloudscraper
 from data_models import JobsModel
+from sendemail import email_main
 from bs4 import BeautifulSoup
 from sqlalchemy import create_engine, URL
 from sqlalchemy.orm import sessionmaker
@@ -140,6 +141,7 @@ def main():
             break
 
     write_to_db(session, parsed_jobs)
+    email_main(session)
     session.close()
 
 

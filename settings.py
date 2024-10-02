@@ -15,6 +15,17 @@ VAULT_SECRET_ID = os.environ.get("VAULT_SECRET_ID")
 multipass = hvac.Client(url=VAULT_ADDR)
 multipass.auth.approle.login(VAULT_ROLE_ID, VAULT_SECRET_ID)
 
+smtp_user = multipass.read('secret/etl/consulting/smtpapp/user')['data']['user']
+smtp_password = multipass.read('secret/etl/consulting/smtpapp/password')['data']['password']
+
+
+# Email settings
+SMTP_SERVER = 'smtp.gmail.com'
+SMTP_PORT = 587 # 465 for SSL
+FROM_EMAIL = multipass.read('secret/etl/consulting/smtpapp/user')['data']['user']
+PASSWORD = multipass.read('secret/etl/consulting/smtpapp/password')['data']['password']
+TO_EMAIL = 'modestprophet@gmail.com'
+
 # app db
 DB_URL = {'drivername': 'postgresql+psycopg2',
           'username': multipass.read('secret/etl/consulting/db/user')['data']['user'],
