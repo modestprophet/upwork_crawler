@@ -3,8 +3,7 @@ import cloudscraper
 from data_models import JobsModel
 from bs4 import BeautifulSoup
 from sqlalchemy import create_engine, URL
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, declarative_base
 
 
 def fetch_url(url, browser=None):
@@ -98,22 +97,13 @@ def parse_job_budget(soup):
 
     return budget
 
-def write_to_db():
-    # # DB stuff
-    engine = create_engine(URL.create(**settings.DB_URL))
-    Base = declarative_base()
-
-    # Create the tables in the database
-    Base.metadata.create_all(engine)
-
-    Session = sessionmaker(bind=engine)
-    session = Session()
-    # Create a new Job object
-    # job = JobsModel(job_title=job_title, job_description=job_description, budget=budget)
-    job = JobsModel()
-
-    # Add the job to the session
-    session.add(job)
+def write_to_db(session, data_dict):
+    for row in data_dict:
+        # Create a new Job object
+        # job = JobsModel(job_title=job_title, job_description=job_description, budget=budget)
+        row_out = JobsModel(**row)
+        # Add the job to the session
+        session.add(row_out)
 
     # Commit the changes to the database
     try:
@@ -123,11 +113,15 @@ def write_to_db():
         session.rollback()
         print(f"Error inserting data: {e}")
 
-    # Close the session
-    session.close()
 
 
 def main():
+    # # DB stuff
+    engine = create_engine(URL.create(**settings.DB_URL), echo=True)
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    JobsModel().__table__.create(bind=engine, checkfirst=True)
+
     links_set = set()
     for url in settings.urls:
         job_search_raw = fetch_url(url, settings.browser_headers)
@@ -141,7 +135,15 @@ def main():
         print(job_url)
         parsed_job = parse_job(fetch_url(job_url), job_url)
         parsed_jobs.append(parsed_job)
+        if len(parsed_jobs) > 2:
+            break
 
+    write_to_db(session, parsed_jobs)
+
+
+
+    # Close the session
+    session.close()
 
 
 
