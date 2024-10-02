@@ -1,21 +1,30 @@
 import requests
 import cloudscraper
 from bs4 import BeautifulSoup
-
+from tensorflow.python.ops.numpy_ops.np_math_ops import append
 
 urls = ['http://www.upwork.com/nx/search/jobs/?nbs=1&per_page=50&q=tableau%20dashboard',
         'http://www.upwork.com/nx/search/jobs/?nbs=1&q=tableau%20developer&page=1&per_page=50']
 
 browser_headers = {
     'browser': 'chrome',
-    'platform': 'android',
-    'desktop': False
+    'platform': 'windows',
+    'desktop': True
 }
 
 
 def fetch_url(url, browser=None):
     scraper = cloudscraper.create_scraper(browser=browser)
     response = scraper.get(url)
+    # TODO:  need a way to handle 403 errors.  Ignore 403 jobs or store and retry?
+    # retry once if not 200
+    if response.status_code != 200:
+        scraper = cloudscraper.create_scraper(browser=browser)
+        response = scraper.get(url)
+        print("Retrying!")
+        if response.status_code == 200:
+            print("Retry successful!")
+    print(response.status_code)
     return response
 
 
@@ -33,6 +42,65 @@ def parse_job(response):
     out_dict = dict
     soup = BeautifulSoup(response.text, 'html.parser')
     # look at a sample posting and parse the soup for various objects like description and hourly price
+
+    # job title
+    job_title = soup.find('h4').get_text()
+
+    # job description
+    job_description_element = soup.find('p', class_='text-body-sm')
+    if not job_description_element:
+        print("No job description section found")
+        return
+    # Extract all text, preserving line breaks
+    job_description_text = ''
+    for element in job_description_element.contents:
+        if element.name == 'br':
+            job_description_text += '\n'
+        elif element.name == 'a':
+            job_description_text += element.get_text() + '\n'
+        else:
+            job_description_text += str(element)
+
+    # budget amount
+    # budget_amounts = soup.find_all('div', {'data-test': 'BudgetAmount'})
+    #
+    # # Extract the numeric values
+    # values = []
+    # for amount in budget_amounts:
+    #     value = amount.find('strong').text.strip()
+    #     numeric_value = value.replace('$', '').replace('.00', '')
+    #     values.append(numeric_value)
+    #
+    # # Join the values with a hyphen
+    # budget_amount = '-'.join(values)
+
+    # Find all <p> tags with class 'm-0'
+    p_tags = soup.find_all('p', class_='m-0')
+    if len(p_tags) <= 0 :
+        print("No p_tags found for this job")
+        return
+
+    # Extract amounts from <strong> tags within those <p> tags
+    values = []
+    for p in p_tags:
+        strong_tag = p.find('strong')
+        if strong_tag:
+            amount = strong_tag.get_text(strip=True).replace('$', '').strip()
+            values.append(amount)
+
+    # Join the values with a hyphen if there are exactly two values
+    if len(values) == 2:
+        result = f"Hourly:  {values[0]}-{values[1]}"
+    elif len(values) == 1:
+        result = f"Total budget:  {values[0]}"
+    else:
+        result = "No budget values found"
+
+    print(result)
+
+
+
+    # Extract
     return out_dict
 
 # # DB stuff
@@ -49,8 +117,9 @@ def main():
     print(links_set)
 
     for job in links_set:
-        # strip the trailing bit of text in each URL
+        # strip text after the ? in job URLs
         job_url = f"https://www.upwork.com{job.split('?')[0]}"
+        print(job_url)
         parsed_job = parse_job(fetch_url(job_url))
 
 
