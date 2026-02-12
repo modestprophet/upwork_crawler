@@ -1,0 +1,14 @@
+services:
+  crawler:
+    build: .
+    init: true  # Prevents zombie Chromium processes
+    ipc: host   # Chromium needs >64MB shared memory; Docker default is too small
+    volumes:
+      # Bind mount for session state and .env files
+      # Update the left side to match your Docker VM's path
+      - /opt/crawler-data:/data
+    environment:
+      - STORAGE_STATE_PATH=/data/state.json
+    env_file:
+      # Mount your .env to /data/.env on the host, or place it next to docker-compose.yml
+      - .env
