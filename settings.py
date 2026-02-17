@@ -15,8 +15,7 @@ VAULT_SECRET_ID = os.environ.get("VAULT_SECRET_ID")
 multipass = hvac.Client(url=VAULT_ADDR)
 multipass.auth.approle.login(VAULT_ROLE_ID, VAULT_SECRET_ID)
 
-# Discord settings
-# DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
+APIFY_API_KEY = multipass.read("secret/etl/consulting/apify")["data"]["api_key"]
 DISCORD_WEBHOOK_URL = multipass.read("secret/etl/consulting/discord/webhookurl")["data"]["url"]
 
 # app db
@@ -30,13 +29,6 @@ DB_URL = {
 }
 
 urls = [
-    "https://www.upwork.com/nx/search/jobs/?nbs=1&per_page=50&q=tableau%20dashboard",
-    "https://www.upwork.com/nx/search/jobs/?nbs=1&q=tableau%20developer&page=1&per_page=50",
+    "https://www.upwork.com/nx/search/jobs/?nbs=1&q=tableau%20dashboard&sort=recency&page=1&per_page=50",
+    "https://www.upwork.com/nx/search/jobs/?nbs=1&q=etl&sort=recency&page=1&per_page=50",
 ]
-
-# Path to Playwright session state file (exported by login_helper.py)
-# Override via STORAGE_STATE_PATH env var for Docker deployments
-STORAGE_STATE_PATH = os.environ.get(
-    "STORAGE_STATE_PATH",
-    os.path.join(os.path.dirname(__file__), "state.json"),
-)

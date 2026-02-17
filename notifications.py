@@ -58,13 +58,6 @@ def send_discord_webhook(message_data):
         print(f"Error sending Discord notification: {e}")
 
 
-def send_alert(subject, body):
-    """Send a simple alert notification for errors like session expiry"""
-    message = f"**{subject}**\n\n{body}"
-    message_data = {"content": message}
-    send_discord_webhook(message_data)
-
-
 def update_job_status(session, jobs):
     """Update the status of the jobs in the database"""
     for job in jobs:
