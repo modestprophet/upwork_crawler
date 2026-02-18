@@ -20,14 +20,15 @@ def compile_discord_message(job):
 
     # Simple message format
     # Reserve space for ID, URL, Title, and other formatting.
-    # Estimated header/footer length: 150 characters
-    max_desc_len = DISCORD_MAX_MESSAGE_LENGTH - len(title_link) - 150
+    # Estimated header/footer length: 200 characters
+    max_desc_len = DISCORD_MAX_MESSAGE_LENGTH - len(title_link) - 200
 
     description = job.description
     if len(description) > max_desc_len:
         description = description[:max_desc_len] + "..."
 
-    message = f"""**New Job Alert**
+    message = f"""--------------------------------------------------
+**New Job Alert**
 
 **Title:** {title_link}
 **ID:** `{job.id}`
@@ -73,7 +74,9 @@ def notify_main(session):
         return
 
     # Send a summary message first
-    summary_message = f"**Upwork Crawler:** Found {len(jobs)} new jobs!"
+    summary_message = f"""==================================================
+**Upwork Crawler:** Found {len(jobs)} new jobs!
+=================================================="""
     send_discord_webhook({"content": summary_message})
 
     for job in jobs:
