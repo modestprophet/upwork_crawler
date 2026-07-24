@@ -149,6 +149,11 @@ Three mechanisms surface a dead session via Telegram:
   (it also registers `/health` in Telegram's command menu). Only your configured
   `chat_id` is honored.
 
+You can also trigger a crawl from Telegram with **`/search`** (handled by the
+same `telegram` listener): it runs a search immediately, posts any new jobs, and
+replies with a completion note (e.g. "no new jobs") so you get feedback either
+way. Only your configured `chat_id` is honored.
+
 Because the crawler, health check, and listener share one browser profile (which
 Firefox locks to a single instance), a file lock in the `/data` volume
 serializes their launches so they never collide.

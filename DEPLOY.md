@@ -62,6 +62,9 @@ docker compose up -d crawler telegram
 ## Handy commands
 
 ```bash
+# Trigger a search from Telegram: send /search to the bot (handled by the
+# `telegram` listener). It posts new jobs and replies with a completion note.
+
 # Run a single crawl immediately (headless), see logs live
 docker compose run --rm crawler run
 

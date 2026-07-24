@@ -17,6 +17,9 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
+# Default number of jobs fetched per search URL (used by cron and /search).
+DEFAULT_LIMIT = 20
+
 
 def save_jobs(session, jobs_data: list[dict]):
     """
@@ -51,20 +54,26 @@ def save_jobs(session, jobs_data: list[dict]):
     else:
         logging.info("No new unique jobs found.")
 
+    return new_jobs_count
+
 
 def run_crawl(limit: int, dump: bool):
     """Fetch each configured search URL via the logged-in browser profile,
-    persist new jobs, and send notifications."""
+    persist new jobs, and send notifications.
+
+    Returns the number of new jobs saved this run, or ``None`` if the crawl was
+    aborted before searching (login not OK, profile busy, or DB unreachable).
+    """
     # Verify the session is still authenticated before crawling; alert if not.
     status, detail = browser.check_login()
     if status in (browser.STATUS_LOGGED_OUT, browser.STATUS_CHALLENGE):
         logging.error("Aborting crawl — not logged in: %s", detail)
         notifications.send_health_report(status, detail)
-        return
+        return None
     if status != browser.STATUS_OK:
         # Busy (another run holds the profile) or transient error — skip quietly.
         logging.warning("Skipping crawl — login check inconclusive (%s): %s", status, detail)
-        return
+        return None
 
     # Database setup
     try:
@@ -76,7 +85,7 @@ def run_crawl(limit: int, dump: bool):
         JobsModel.__table__.create(bind=engine, checkfirst=True)
     except Exception as e:
         logging.error(f"Database connection failed: {e}")
-        return
+        return None
 
     try:
         all_jobs = []
@@ -92,7 +101,7 @@ def run_crawl(limit: int, dump: bool):
             except Exception as e:
                 logging.error(f"Failed to fetch/parse jobs for {url}: {e}")
 
-        save_jobs(db_session, all_jobs)
+        new_count = save_jobs(db_session, all_jobs)
 
         # Send notifications
         try:
@@ -100,6 +109,7 @@ def run_crawl(limit: int, dump: bool):
         except Exception as e:
             logging.error(f"Notification failed: {e}")
 
+        return new_count
     finally:
         db_session.close()
 
@@ -126,11 +136,14 @@ def run_listener():
     chat_id = str(settings.TELEGRAM_CHAT_ID)
     base = f"https://api.telegram.org/bot{token}"
 
-    # Advertise the command in the Telegram UI (shows in the "/" menu).
+    # Advertise the commands in the Telegram UI (shows in the "/" menu).
     try:
         requests.post(
             f"{base}/setMyCommands",
-            json={"commands": [{"command": "health", "description": "Check Upwork login status"}]},
+            json={"commands": [
+                {"command": "search", "description": "Run an Upwork search now"},
+                {"command": "health", "description": "Check Upwork login status"},
+            ]},
             timeout=10,
         )
     except Exception as e:
@@ -165,13 +178,34 @@ def run_listener():
             if chat != chat_id or not text:
                 continue  # ignore anyone who isn't the configured owner chat
             cmd = text.split()[0].split("@")[0].lower()
-            if cmd == "/health":
+            if cmd == "/search":
+                logging.info("Received /search command")
+                notifications.send_telegram_message("🔎 Running Upwork search…")
+                try:
+                    new_count = run_crawl(limit=DEFAULT_LIMIT, dump=False)
+                except Exception as e:
+                    logging.error("Manual search failed: %s", e)
+                    notifications.send_telegram_message(f"⚠️ Search errored: {e}")
+                    continue
+                if new_count is None:
+                    # Aborted before searching (login/busy/DB). run_crawl already
+                    # alerted on a dead session; add a note for the other cases.
+                    notifications.send_telegram_message(
+                        "⚠️ Search didn't complete — session or database unavailable. "
+                        "Send /health to check login status."
+                    )
+                elif new_count == 0:
+                    notifications.send_telegram_message("✅ Search complete — no new jobs.")
+                # else: notify_main already posted the new jobs + a summary.
+            elif cmd == "/health":
                 logging.info("Received /health command")
                 notifications.send_telegram_message("🔍 Running Upwork health check…")
                 run_health(always_report=True)
             elif cmd == "/start":
                 notifications.send_telegram_message(
-                    "Upwork crawler bot online. Send /health to check login status."
+                    "Upwork crawler bot online.\n"
+                    "• /search — run a search now\n"
+                    "• /health — check login status"
                 )
 
 
@@ -200,8 +234,8 @@ def main():
     parser.add_argument(
         "--limit",
         type=int,
-        default=20,
-        help="Maximum number of jobs to fetch per URL (default: 20)",
+        default=DEFAULT_LIMIT,
+        help=f"Maximum number of jobs to fetch per URL (default: {DEFAULT_LIMIT})",
     )
     args = parser.parse_args()
 
