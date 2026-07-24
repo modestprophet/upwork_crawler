@@ -1,6 +1,7 @@
 import os
 import hvac
 from os.path import join, dirname
+from urllib.parse import quote
 from dotenv import load_dotenv
 
 dotenv_path = join(dirname(__file__), ".env")
@@ -40,7 +41,18 @@ DB_URL = {
     "database": "plumbus",
 }
 
-urls = [
-    "https://www.upwork.com/nx/search/jobs/?nbs=1&q=tableau%20dashboard&sort=recency&page=1&per_page=50",
-    "https://www.upwork.com/nx/search/jobs/?nbs=1&q=etl&sort=recency&page=1&per_page=50",
-]
+# Upwork job-search URL, parameterized by query. Used both for the configured
+# base searches below and for ad-hoc `/search <terms>` requests from Telegram.
+SEARCH_URL_TEMPLATE = (
+    "https://www.upwork.com/nx/search/jobs/?nbs=1&q={q}&sort=recency&page=1&per_page=50"
+)
+
+
+def build_search_url(query: str) -> str:
+    """Build an Upwork search URL for a query string (URL-encoded)."""
+    return SEARCH_URL_TEMPLATE.format(q=quote(query))
+
+
+# Base searches run on the schedule and by a bare `/search` (no terms).
+SEARCH_TERMS = ["tableau dashboard", "etl"]
+urls = [build_search_url(t) for t in SEARCH_TERMS]

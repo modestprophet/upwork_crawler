@@ -1,4 +1,5 @@
 import argparse
+import html
 import logging
 import time
 from pathlib import Path
@@ -57,13 +58,18 @@ def save_jobs(session, jobs_data: list[dict]):
     return new_jobs_count
 
 
-def run_crawl(limit: int, dump: bool):
-    """Fetch each configured search URL via the logged-in browser profile,
-    persist new jobs, and send notifications.
+def run_crawl(limit: int, dump: bool, urls: list[str] | None = None):
+    """Fetch each search URL via the logged-in browser profile, persist new
+    jobs, and send notifications.
+
+    Args:
+        urls: Search URLs to crawl. Defaults to the configured base searches
+            (``settings.urls``); an ad-hoc ``/search <terms>`` passes its own.
 
     Returns the number of new jobs saved this run, or ``None`` if the crawl was
     aborted before searching (login not OK, profile busy, or DB unreachable).
     """
+    search_urls = urls if urls is not None else settings.urls
     # Verify the session is still authenticated before crawling; alert if not.
     status, detail = browser.check_login()
     if status in (browser.STATUS_LOGGED_OUT, browser.STATUS_CHALLENGE):
@@ -89,7 +95,7 @@ def run_crawl(limit: int, dump: bool):
 
     try:
         all_jobs = []
-        for url in settings.urls:
+        for url in search_urls:
             try:
                 dump_dir = (
                     Path(settings.PROFILE_DIR).parent / "dumps"
@@ -141,7 +147,7 @@ def run_listener():
         requests.post(
             f"{base}/setMyCommands",
             json={"commands": [
-                {"command": "search", "description": "Run an Upwork search now"},
+                {"command": "search", "description": "Run a search now (optionally: /search <terms>)"},
                 {"command": "health", "description": "Check Upwork login status"},
             ]},
             timeout=10,
@@ -179,10 +185,22 @@ def run_listener():
                 continue  # ignore anyone who isn't the configured owner chat
             cmd = text.split()[0].split("@")[0].lower()
             if cmd == "/search":
-                logging.info("Received /search command")
-                notifications.send_telegram_message("🔎 Running Upwork search…")
+                # Terms after the command run a one-off search for just those
+                # terms; a bare /search runs the configured base searches.
+                parts = text.split(maxsplit=1)
+                query = parts[1].strip() if len(parts) > 1 else ""
+                if query:
+                    logging.info("Received /search command: %r", query)
+                    search_urls = [settings.build_search_url(query)]
+                    notifications.send_telegram_message(
+                        f"🔎 Searching Upwork for “{html.escape(query)}”…"
+                    )
+                else:
+                    logging.info("Received /search command (base searches)")
+                    search_urls = None
+                    notifications.send_telegram_message("🔎 Running Upwork search…")
                 try:
-                    new_count = run_crawl(limit=DEFAULT_LIMIT, dump=False)
+                    new_count = run_crawl(limit=DEFAULT_LIMIT, dump=False, urls=search_urls)
                 except Exception as e:
                     logging.error("Manual search failed: %s", e)
                     notifications.send_telegram_message(f"⚠️ Search errored: {e}")
@@ -204,7 +222,8 @@ def run_listener():
             elif cmd == "/start":
                 notifications.send_telegram_message(
                     "Upwork crawler bot online.\n"
-                    "• /search — run a search now\n"
+                    "• /search — run the configured base searches now\n"
+                    "• /search &lt;terms&gt; — one-off search for those terms\n"
                     "• /health — check login status"
                 )
 
