@@ -104,14 +104,17 @@ def run_crawl(limit: int, dump: bool):
         db_session.close()
 
 
-def run_health(always_report: bool):
+def run_health(always_report: bool, dump: bool = False):
     """Check whether the profile is still logged into Upwork.
 
     Args:
         always_report: If True (on-demand /health), always send the result to
             Telegram. If False (daily cron), only alert when something is wrong.
+        dump: If True, write the probe's landing URL/cookies/HTML to dumps/ for
+            debugging false alerts.
     """
-    status, detail = browser.check_login()
+    dump_dir = Path(settings.PROFILE_DIR).parent / "dumps" if dump else None
+    status, detail = browser.check_login(dump_dir=dump_dir)
     logging.info("Health check: %s — %s", status, detail)
     if always_report or status in (browser.STATUS_LOGGED_OUT, browser.STATUS_CHALLENGE, browser.STATUS_ERROR):
         notifications.send_health_report(status, detail)
@@ -211,7 +214,7 @@ def main():
         return
 
     if args.health:
-        run_health(always_report=True)
+        run_health(always_report=True, dump=args.dump)
         return
 
     run_crawl(limit=args.limit, dump=args.dump)

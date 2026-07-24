@@ -220,14 +220,16 @@ def _looks_logged_out(final_url: str, html: str) -> bool:
     return 'name="login[username]"' in html or 'id="login_password"' in html
 
 
-def check_login() -> tuple[str, str]:
+def check_login(dump_dir: Optional[Path] = None) -> tuple[str, str]:
     """Verify the persistent profile is still logged into Upwork.
 
     Returns a ``(status, detail)`` tuple where status is one of the module's
     ``STATUS_*`` constants. Never raises — transient/lock failures map to
     ``STATUS_BUSY``/``STATUS_ERROR`` so callers don't misreport a live session
-    as logged out.
+    as logged out. If ``dump_dir`` is given, the probe's landing URL, cookie
+    names and rendered HTML are written there for debugging false alerts.
     """
+    cookie_names: list[str] = []
     try:
         with _browser(headless=True, require_preset=True) as context:
             page = context.pages[0] if context.pages else context.new_page()
@@ -239,10 +241,32 @@ def check_login() -> tuple[str, str]:
             final_url = page.url
             html = page.content()
             cookie_ok = _has_auth_cookie(context)
+            try:
+                cookie_names = sorted(c.get("name", "") for c in context.cookies())
+            except Exception:
+                cookie_names = []
     except ProfileBusyError as e:
         return STATUS_BUSY, str(e)
     except Exception as e:  # pragma: no cover - defensive
         return STATUS_ERROR, f"health check failed to launch: {e}"
+
+    if dump_dir is not None:
+        dump_dir.mkdir(parents=True, exist_ok=True)
+        (dump_dir / "health_probe.html").write_text(html)
+        (dump_dir / "health_probe.json").write_text(
+            json.dumps(
+                {
+                    "final_url": final_url,
+                    "cookie_ok": cookie_ok,
+                    "cookie_names": cookie_names,
+                    "is_challenged": _is_challenged(html),
+                    "looks_logged_out": _looks_logged_out(final_url, html),
+                    "html_len": len(html),
+                },
+                indent=2,
+            )
+        )
+        logger.info("Wrote health probe dump to %s (landed on %s)", dump_dir, final_url)
 
     if _is_challenged(html):
         return STATUS_CHALLENGE, "hit a Cloudflare challenge — cf_clearance may be stale"
@@ -437,5 +461,23 @@ _NUXT_JOBS_JS = """
 
 
 def _is_challenged(html: str) -> bool:
-    markers = ("Just a moment", "cf-challenge", "challenge-platform", "Verifying you are human")
+    """True only for an actual Cloudflare interstitial served *instead of* the page.
+
+    Note: Cloudflare injects its ``challenge-platform`` script and the
+    "Verifying you are human" Turnstile string into *normal, cleared* pages too,
+    so those substrings are NOT reliable markers. The real "Just a moment…"
+    interstitial is a small page that carries the managed-challenge JS payload
+    (``_cf_chl_opt`` / ``__CF$cv$params``) and a ``challenge-running`` container.
+    """
+    if len(html) > 100_000:
+        # The interstitial is a tiny standalone page; a large document is the
+        # real (cleared) page, which may merely embed the Turnstile widget.
+        return False
+    markers = (
+        "_cf_chl_opt",
+        "__CF$cv$params",
+        "cf-challenge-running",
+        "id=\"challenge-running\"",
+        "<title>Just a moment...</title>",
+    )
     return any(m in html for m in markers)
