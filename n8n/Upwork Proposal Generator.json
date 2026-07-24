@@ -1,0 +1,238 @@
+{
+  "name": "Upwork Proposal Generator",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 🤖 STEP 4: AI Agent Orchestration\n\nMain agent that coordinates all sub-workflows:\n\n**When chat message received**: Accepts Upwork job descriptions\n**AI Agent**: Uses OpenAI with memory to maintain context\n**Tool Integration**: Calls three sub-workflows (application, proposal, diagram)\n**Smart Replacement**: Automatically replaces $$$ placeholders with actual Google Doc links\n\n**Business Value**: Transforms hours of manual proposal work into minutes of automated generation\n\n**Revenue Potential**: Based on $500K+ Upwork earnings using these exact templates and strategies",
+        "height": 384,
+        "width": 420
+      },
+      "id": "25a64031-cbc9-4834-9178-632adcf00068",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        368,
+        1232
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "You're a helpful, intelligent Upwork assistant. Your task is to receive an Upwork job description and then use it to generate assets, like Mermaid diagrams, Google Docs, and Upwork application bodies. \n\nWhen you receive an Upwork job description, you *must* generate a Mermaid diagram, a Google Doc proposal, and an Upwork application. You must then replace the $$$ with the Google Doc proposal link.\n\nOutput the Google Doc proposal link in plaintext, like link: https://www..."
+        }
+      },
+      "id": "68a46c9e-4ee3-454d-9c27-1c5e281724a7",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [
+        1184,
+        1248
+      ],
+      "typeVersion": 1.7
+    },
+    {
+      "parameters": {
+        "model": "=openai/gpt-oss-20b",
+        "options": {}
+      },
+      "id": "f6dff3af-6183-4144-b145-051e12c21868",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "position": [
+        864,
+        1552
+      ],
+      "typeVersion": 1,
+      "credentials": {
+        "openAiApi": {
+          "id": "kw2yALIoxKYeNCJD",
+          "name": "Together AI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 10
+      },
+      "id": "48f145b4-6357-454a-bae6-1ca1e0666baf",
+      "name": "Window Buffer Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "position": [
+        1024,
+        1552
+      ],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "name": "generate_upwork_application_copy",
+        "description": "Call this tool to generate Upwork application copy. The input will be an Upwork job description, and the output will be the Upwork application copy string from the tool.",
+        "workflowId": {
+          "__rl": true,
+          "value": "Y6xNHurnp0YEgEVb",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/Y6xNHurnp0YEgEVb",
+          "cachedResultName": "Upwork Proposal Generator - 1 - Generate application copy"
+        }
+      },
+      "id": "9504c8d4-63c5-4260-9d20-7fd08030e561",
+      "name": "Generate Application Copy",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "position": [
+        1184,
+        1552
+      ],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "name": "generate_google_doc_proposal",
+        "description": "Call this tool to generate a Google Doc proposal for an Upwork job. The input should be a string of an Upwork job post, and the output will be a proposal URL that you can use to fill in templates.",
+        "workflowId": {
+          "__rl": true,
+          "value": "uJeGNXVN6f6XM9Xb",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/uJeGNXVN6f6XM9Xb",
+          "cachedResultName": "Upwork Proposal Generator - 2 - Generate google doc"
+        },
+        "responsePropertyName": "urlOfProposal"
+      },
+      "id": "7ac89d7e-0f0a-4872-ba9e-457d27f01353",
+      "name": "Generate Google Doc Proposal",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "position": [
+        1552,
+        1552
+      ],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "name": "generate_mermaid_diagram",
+        "description": "Call this tool to generate Mermaid.js diagram code. The input will be an Upwork job description, and the output will be the mermaid diagram code.",
+        "workflowId": {
+          "__rl": true,
+          "value": "v4SZHNK06Shkirzw",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/v4SZHNK06Shkirzw",
+          "cachedResultName": "Upwork Proposal Generator - 3 - Generate mermaid diagram"
+        },
+        "responsePropertyName": "mermaidCode"
+      },
+      "id": "cb0dac4a-6495-44b5-ba3e-1d6bebcb5ecf",
+      "name": "Generate Mermaid.js",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "position": [
+        1376,
+        1552
+      ],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "availableInChat": true,
+        "agentName": "Upwork Bot",
+        "agentDescription": "Upwork bot helps generate upwork proposals",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        928,
+        1248
+      ],
+      "id": "190bdfa6-2b29-45c0-95e2-c1cb965ce726",
+      "name": "When chat message received",
+      "webhookId": "95cc9130-c848-45c0-8ba7-e0e91580e2fd"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Mermaid.js": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Window Buffer Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Application Copy": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Google Doc Proposal": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "1a43f448-33ef-434d-ba42-687a21930438",
+  "meta": {
+    "templateId": "6174",
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d96072bda0a63e983f4bf714e59471b73cbecc90c954cfa02af8488b3cd03f70"
+  },
+  "id": "byaNazxWL0Ubq2SeAH4KV",
+  "tags": []
+}

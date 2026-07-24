@@ -15,8 +15,18 @@ VAULT_SECRET_ID = os.environ.get("VAULT_SECRET_ID")
 multipass = hvac.Client(url=VAULT_ADDR)
 multipass.auth.approle.login(VAULT_ROLE_ID, VAULT_SECRET_ID)
 
-APIFY_API_KEY = multipass.read("secret/etl/consulting/apify")["data"]["api_key"]
 DISCORD_WEBHOOK_URL = multipass.read("secret/etl/consulting/discord/webhookurl")["data"]["url"]
+
+# Persistent Camoufox profile (cookies + cf_clearance + pinned fingerprint).
+# In Docker this should point at a mounted volume so it survives restarts.
+PROFILE_DIR = os.environ.get("PROFILE_DIR", "/data/profile")
+
+# Headless for scheduled runs; --login flips this to headful automatically.
+HEADLESS = os.environ.get("HEADLESS", "true").lower() not in ("0", "false", "no")
+
+# Derive timezone/geolocation from the exit IP. Needs a GeoLite2 DB present;
+# off by default so runs don't crash if it isn't downloaded.
+GEOIP = os.environ.get("GEOIP", "false").lower() in ("1", "true", "yes")
 
 # app db
 DB_URL = {

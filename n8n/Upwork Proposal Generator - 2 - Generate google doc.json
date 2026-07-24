@@ -1,0 +1,332 @@
+{
+  "name": "Upwork Proposal Generator - 2 - Generate google doc",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 📄 STEP 2: Google Doc Proposal Creation\n\nGenerates professional proposal documents:\n\n1. **OpenAI1**: Creates structured proposal content (title, explanation, scope, timeline)\n2. **Google Drive**: Copies template and creates unique document\n3. **Google Drive1**: Shares document publicly for client access\n4. **Google Docs**: Replaces template variables with AI-generated content\n5. **Edit Fields1**: Returns shareable URL to AI agent\n\n**Output**: Professional proposal document with personalized content and social proof",
+        "height": 428,
+        "width": 420
+      },
+      "id": "efdb0c85-ecf9-4fd3-a2c8-26a229e12ca8",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        384,
+        592
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "operation": "copy",
+        "fileId": {
+          "__rl": true,
+          "value": "1EFXQldJDqLFs9mj1phoY9Hya3zxjtO36TKvdXrO95Ks",
+          "mode": "list",
+          "cachedResultName": "_upwork_proposal_template",
+          "cachedResultUrl": "https://docs.google.com/document/d/1EFXQldJDqLFs9mj1phoY9Hya3zxjtO36TKvdXrO95Ks/edit?usp=drivesdk"
+        },
+        "name": "={{ $json.message.content.titleOfSystem }}",
+        "options": {}
+      },
+      "id": "2d15c7b4-6bfc-449f-b022-2cd16bd2e7c8",
+      "name": "Google Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "position": [
+        1680,
+        640
+      ],
+      "typeVersion": 3,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Ia6IyBCbL59C4nQR",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "share",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.id }}"
+        },
+        "permissionsUi": {
+          "permissionsValues": {
+            "role": "reader",
+            "type": "anyone"
+          }
+        },
+        "options": {}
+      },
+      "id": "a4c50013-78a0-441b-84e0-55b127931164",
+      "name": "Google Drive1",
+      "type": "n8n-nodes-base.googleDrive",
+      "position": [
+        1904,
+        640
+      ],
+      "typeVersion": 3,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Ia6IyBCbL59C4nQR",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $('Google Drive').item.json.id }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "replaceAll",
+              "text": "{{titleOfSystem}}",
+              "replaceText": "={{ $('LLM').item.json.message.content.titleOfSystem }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{briefExplanationOfSystem}}",
+              "replaceText": "={{ $('LLM').item.json.message.content.briefExplanationOfSystem }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{specificPartOfTheirRequest}}",
+              "replaceText": "={{ $('LLM').item.json.message.content.specificPartOfTheirRequest }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{stepByStepBulletPoints}}",
+              "replaceText": "={{ $('LLM').item.json.message.content.stepByStepBulletPoints }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{leftToRightFlowWithArrows}}",
+              "replaceText": "={{ $('LLM').item.json.message.content.leftToRightFlowWithArrows }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{aboutMeBulletPoints}}",
+              "replaceText": "={{ $('LLM').item.json.message.content.aboutMeBulletPoints }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{paraphrasedSystem}}",
+              "replaceText": "={{ $('LLM').item.json.message.content.paraphrasedSystem }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{expectedOutcome}}",
+              "replaceText": "={{ $('LLM').item.json.message.content.expectedOutcome }}"
+            }
+          ]
+        }
+      },
+      "id": "ae090c12-baec-41b9-8f6f-1b73584bf04a",
+      "name": "Google Docs",
+      "type": "n8n-nodes-base.googleDocs",
+      "position": [
+        2128,
+        640
+      ],
+      "typeVersion": 2,
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "lJnCntigaLbIFqXg",
+          "name": "Google Docs account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e980c92c-07d9-400e-b40c-a8fbdbe8bbcb",
+              "name": "aboutMe",
+              "type": "string",
+              "value": "I build the dashboards, pipelines, and ML models that find needles in haystacks. 15+ years across cybersecurity, retail, and healthcare. Full stack analytics—BI, ETL, AI/ML.  Some notable things I’ve done:  - 22 Tableau dashboards for a major grocery chain. 10M rows. Optimized their entire product lineup. - Security analytics platform that cut report time by 90% (from 8+ hours to under 1). Covered 165 firewalls. - Automated reporting that gave 50+ client managers back 250+ hours every month - TensorFlow sentiment analysis pipeline with attention. Built for explainability, not just accuracy. - Client risk dashboard that protected $5M+ in recurring revenue. Leadership used it to stop churn before it started. - 10-15% reduction in false positives for Fortune 500 airline and banking clients - Centralized data warehouses that turned week long report cycles into same day delivery  I turn raw data into clear stories. The kind that make executives act and engineers nod."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7d48e6bd-26d7-4784-a857-dfcd3da71478",
+      "name": "Set Variable1",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        1104,
+        640
+      ],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "74b2ef09-da1d-4fe0-b6ea-242f25edf5e8",
+              "name": "urlOfProposal",
+              "type": "string",
+              "value": "=https://docs.google.com/document/d/{{ $json.documentId }}/edit"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "01ddabd1-02d2-4be7-98c0-afe9b2b6a6f2",
+      "name": "Edit Fields1",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        2336,
+        640
+      ],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "query"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        944,
+        640
+      ],
+      "id": "04414051-cb52-4a9b-aefc-bc22a5ce987f",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "openai/gpt-oss-120b",
+          "mode": "id"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a helpful, intelligent proposal writer.",
+              "role": "system"
+            },
+            {
+              "content": "=I'm an automation specialist applying to jobs on freelance platforms.\n\nYour task is to take as input an Upwork job description and return as output JSON for a customized proposal (which I'll upload to Google Docs).\n\nHigh-performing proposals are typically templated as follows:\n\n```\n# {titleOfSystem}\n## {briefExplanationOfSystem}\n\nHi. I took some time to analyze your job post regarding {specificPartOfTheirRequest}. Because I've built similar setups repeatedly, I wanted to map out a concrete solution for you.\n\n**The Objective:**\nBuild {paraphrasedSystem} that effectively handles {expectedOutcome}.\n\n**How We Get There (Phase by Phase):**\n{stepByStepBulletPoints}\n\n**System Architecture (At a glance):**\n{leftToRightFlowWithArrows}\n\n**My Background:**\n{aboutMeBulletPoints}\n\nI prefer operating as a long-term partner rather than a one-off contractor. If we work together, my focus will be on building resilient systems that actually move the needle for your business.\n\nIf this approach resonates with you, shoot me a message on Upwork and we can discuss the finer details.\n```\n\nOutput your results in JSON using this format:\n\n{\n  \"titleOfSystem\": \"\",\n  \"briefExplanationOfSystem\": \"\",\n  \"specificPartOfTheirRequest\": \"\",\n  \"paraphrasedSystem\": \"\",\n  \"expectedOutcome\": \"\",\n  \"stepByStepBulletPoints\": \"\",\n  \"leftToRightFlowWithArrows\": \"\",\n  \"aboutMeBulletPoints\": \"\"\n}\n\nRules:\n- Write in a casual, spartan tone of voice.\n- Don't use emojis or flowery language.\n- If there's a name included somewhere in the description, add it for personalization purposes.\n- Return \"stepByStepBulletPoints\" and \"aboutMeBulletPoints\" as strings, and delimit each bullet point with a \\n and make sure it includes a -\n- In \"aboutMeBulletPoints\", prefer to mention social proof that includes $ and numbers.\n- For \"leftToRightFlowWithArrows\", write a simplified left to right flow delimited by \"->\" strings. For instance, we receive a new email -> we add that to the CRM -> we send an email to the new lead.\n- Use first-person \"I\" language, like \"I'd streamline...\" for bullet points etc.\n\n\nSome facts about me for the personalization: {{ $json.aboutMe }}\n"
+            },
+            {
+              "content": "={\"jobDescription\":\"{{ $('When Executed by Another Workflow').item.json.query }}\"}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "id": "9edfe7ee-313c-404c-9198-87668cba22ab",
+      "name": "LLM",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [
+        1296,
+        640
+      ],
+      "typeVersion": 1.6,
+      "credentials": {
+        "openAiApi": {
+          "id": "kw2yALIoxKYeNCJD",
+          "name": "Together AI API"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Google Docs": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Drive": {
+      "main": [
+        [
+          {
+            "node": "Google Drive1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Drive1": {
+      "main": [
+        [
+          {
+            "node": "Google Docs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Variable1": {
+      "main": [
+        [
+          {
+            "node": "LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Set Variable1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM": {
+      "main": [
+        [
+          {
+            "node": "Google Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "466b975f-8c03-40a2-8714-e74fcf24605a",
+  "meta": {
+    "templateId": "6174",
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d96072bda0a63e983f4bf714e59471b73cbecc90c954cfa02af8488b3cd03f70"
+  },
+  "id": "uJeGNXVN6f6XM9Xb",
+  "tags": []
+}

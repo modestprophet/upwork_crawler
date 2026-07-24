@@ -1,0 +1,141 @@
+{
+  "name": "Upwork Proposal Generator - 3 - Generate mermaid diagram",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 📊 STEP 3: Mermaid Diagram Generation\n\nCreates workflow diagrams for visual proposals:\n\n**OpenAI2**: Analyzes job requirements and generates Mermaid.js flowchart code\n**Edit Fields2**: Formats diagram code for agent use\n\n**Purpose**: Provides visual representation of proposed solution\n**Client Perception**: Demonstrates thorough analysis and professional approach\n\n**Example Output**: \"graph TD; A-->B; B-->C;\" (flowchart syntax)\n\n**Usage**: Copy code into Mermaid visualizer or Whimsical for client presentation",
+        "height": 428,
+        "width": 400
+      },
+      "id": "6dc41c73-1daa-4305-b614-d4d99e3eba89",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        384,
+        896
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "openai/gpt-oss-120b",
+          "mode": "id"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a helpful, intelligent Mermaid.js code writer.",
+              "role": "system"
+            },
+            {
+              "content": "=Your task is to take as input an Upwork job description and return as output a Mermaid diagram that I can visualize using a subsequent Mermaid.js tool.\n\nOutput your results in plaintext using Mermaid code formatting. Don't output anything but the Mermaid diagram code.\n\nHere's an example of what your output should look like:\n\ngraph TD;\n    A-->B;\n    A-->C;\n    B-->D;\n    C-->D;\n\nRules:\n- You only output flowcharts. Nothing else. No sequence diagrams, no Gantt charts—only flowcharts.\n- Do not output any accessory formatting information, like ```mermaid.\n- Your first character should be g."
+            },
+            {
+              "content": "={{ $json.query }}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "id": "0568f090-a92f-4ccd-a159-f4072914d1cb",
+      "name": "OpenAI2",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [
+        1040,
+        1024
+      ],
+      "typeVersion": 1.6,
+      "credentials": {
+        "openAiApi": {
+          "id": "kw2yALIoxKYeNCJD",
+          "name": "Together AI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d47590b5-3683-4afe-bc27-a25fb94a32d5",
+              "name": "mermaidCode",
+              "type": "string",
+              "value": "={{ $json.message.content }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1bf4c6ab-d4c6-4549-8967-892d8d0905a4",
+      "name": "Edit Fields2",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        1344,
+        1024
+      ],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "query"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        864,
+        1024
+      ],
+      "id": "fff06adf-1b24-40ec-8808-7da0ee36c949",
+      "name": "When Executed by Another Workflow"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "OpenAI2": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "OpenAI2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "f904c0a3-931e-466a-947a-c55a7a0621de",
+  "meta": {
+    "templateId": "6174",
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d96072bda0a63e983f4bf714e59471b73cbecc90c954cfa02af8488b3cd03f70"
+  },
+  "id": "v4SZHNK06Shkirzw",
+  "tags": []
+}

@@ -1,10 +1,35 @@
 services:
+  # Scheduled headless crawler (runs cron; the default long-lived service).
   crawler:
     build: .
+    image: upwork-crawler
     restart: unless-stopped
     volumes:
-      # Bind mount for .env files
-      # Update the left side to match your Docker VM's path
       - ./.env:/app/.env
+      - upwork_profile:/data        # persistent Camoufox profile + cf_clearance
     env_file:
       - .env
+    environment:
+      - PROFILE_DIR=/data/profile
+
+  # One-time interactive login over VNC. Not started by `up`; invoke on demand:
+  #   docker compose run --rm --service-ports login
+  # then open http://<host>:6080/vnc.html, sign in, and press ENTER in the terminal.
+  login:
+    build: .
+    image: upwork-crawler
+    profiles: ["login"]
+    command: ["login"]
+    ports:
+      - "6080:6080"   # noVNC web client
+      - "5900:5900"   # raw VNC (optional, for a native VNC client)
+    volumes:
+      - ./.env:/app/.env
+      - upwork_profile:/data
+    env_file:
+      - .env
+    environment:
+      - PROFILE_DIR=/data/profile
+
+volumes:
+  upwork_profile:

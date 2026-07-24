@@ -1,10 +1,12 @@
 import argparse
 import logging
-from apify_client import ApifyClient
+from pathlib import Path
+
 from sqlalchemy import create_engine, URL
 from sqlalchemy.orm import sessionmaker
 
 import settings
+import browser
 from data_models import JobsModel
 from notifications import notify_main
 
@@ -12,63 +14,6 @@ from notifications import notify_main
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
-
-
-def fetch_jobs_from_apify(client: ApifyClient, url: str, limit: int) -> list[dict]:
-    """
-    Fetch jobs using the Apify Upwork Job Scraper actor.
-
-    Args:
-        client: Authenticated ApifyClient instance.
-        url: The Upwork search URL to scrape.
-        limit: Maximum number of jobs to retrieve.
-
-    Returns:
-        A list of dictionaries containing job details.
-    """
-    run_input = {
-        "rawUrl": url,
-        "limit": limit,
-        "maxJobAge": {
-            "value": 1,
-            "unit": "days",
-        },  # Fetch jobs posted within the last day
-    }
-
-    logging.info(f"Starting Apify actor for URL: {url}")
-
-    # Run the actor and wait for it to finish
-    run = client.actor("neatrat/upwork-job-scraper").call(run_input=run_input)
-
-    logging.info(f"Actor run finished. Dataset ID: {run['defaultDatasetId']}")
-
-    # Fetch results from the dataset
-    dataset_items = client.dataset(run["defaultDatasetId"]).list_items().items
-    logging.info(f"Retrieved {len(dataset_items)} items from dataset.")
-
-    return dataset_items
-
-
-def parse_apify_job(job_data: dict) -> dict:
-    """
-    Map Apify job data to our internal JobsModel structure.
-    """
-    # Format budget string
-    budget = "N/A"
-    if job_data.get("budget"):
-        budget = f"Total budget: ${job_data['budget']}"
-    elif job_data.get("hourlyMin") and job_data.get("hourlyMax"):
-        budget = f"Hourly: ${job_data['hourlyMin']}-${job_data['hourlyMax']}"
-    elif job_data.get("hourlyMin"):
-        budget = f"Hourly: ${job_data['hourlyMin']}+"
-
-    return {
-        "url": job_data.get("url"),
-        "title": job_data.get("title"),
-        "description": job_data.get("description"),
-        "budget": budget,
-        "status": "new",
-    }
 
 
 def save_jobs(session, jobs_data: list[dict]):
@@ -105,26 +50,9 @@ def save_jobs(session, jobs_data: list[dict]):
         logging.info("No new unique jobs found.")
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Upwork Crawler using Apify")
-    parser.add_argument(
-        "--limit",
-        type=int,
-        default=20,
-        help="Maximum number of jobs to fetch per URL (default: 20)",
-    )
-    args = parser.parse_args()
-
-    # check for API key
-    if not settings.APIFY_API_KEY:
-        logging.error(
-            "APIFY_API_KEY not found in settings. Please set it in your .env file."
-        )
-        return
-
-    # Initialize Apify client
-    client = ApifyClient(settings.APIFY_API_KEY)
-
+def run_crawl(limit: int, dump: bool):
+    """Fetch each configured search URL via the logged-in browser profile,
+    persist new jobs, and send notifications."""
     # Database setup
     try:
         engine = create_engine(URL.create(**settings.DB_URL))
@@ -141,11 +69,13 @@ def main():
         all_jobs = []
         for url in settings.urls:
             try:
-                raw_jobs = fetch_jobs_from_apify(client, url, args.limit)
-                for job in raw_jobs:
-                    parsed_job = parse_apify_job(job)
-                    if parsed_job["url"]:  # Ensure URL exists
-                        all_jobs.append(parsed_job)
+                dump_dir = (
+                    Path(settings.PROFILE_DIR).parent / "dumps"
+                    if dump
+                    else None
+                )
+                jobs = browser.fetch_jobs(url, limit, dump_dir=dump_dir)
+                all_jobs.extend(jobs)
             except Exception as e:
                 logging.error(f"Failed to fetch/parse jobs for {url}: {e}")
 
@@ -159,6 +89,33 @@ def main():
 
     finally:
         db_session.close()
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Upwork Crawler (Camoufox)")
+    parser.add_argument(
+        "--login",
+        action="store_true",
+        help="Open a headful browser to log in once and save the profile.",
+    )
+    parser.add_argument(
+        "--dump",
+        action="store_true",
+        help="Write raw page HTML + JSON responses to a dumps/ dir for tuning.",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="Maximum number of jobs to fetch per URL (default: 20)",
+    )
+    args = parser.parse_args()
+
+    if args.login:
+        browser.login_bootstrap()
+        return
+
+    run_crawl(limit=args.limit, dump=args.dump)
 
 
 if __name__ == "__main__":

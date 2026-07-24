@@ -1,0 +1,176 @@
+{
+  "name": "Upwork Proposal Generator - 1 - Generate application copy",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 🎯 STEP 1: Application Copy Generation\n\nGenerates personalized Upwork application text:\n\n**Execute Workflow Trigger**: Receives job description from AI agent\n**Set Variable**: Contains personal social proof and achievements\n**OpenAI**: Creates custom application using proven templates\n**Edit Fields**: Formats response for agent consumption\n\n**Template Structure**: \"Hi, I do [thing] all the time. So confident I created a demo: $$$\"\n\n**Key**: Uses templated approach with AI filling specific variables, not generating entire proposal",
+        "height": 460,
+        "width": 400
+      },
+      "id": "0313dec0-b33e-401c-9c89-c6cfa4f55154",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        368,
+        240
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e980c92c-07d9-400e-b40c-a8fbdbe8bbcb",
+              "name": "aboutMe",
+              "type": "string",
+              "value": "I build the dashboards, pipelines, and ML models that find needles in haystacks. 15+ years across cybersecurity, retail, and healthcare. Full stack analytics—BI, ETL, AI/ML.  Some notable things I’ve done:  - 22 Tableau dashboards for a major grocery chain. 10M rows. Optimized their entire product lineup. - Security analytics platform that cut report time by 90% (from 8+ hours to under 1). Covered 165 firewalls. - Automated reporting that gave 50+ client managers back 250+ hours every month - TensorFlow sentiment analysis pipeline with attention. Built for explainability, not just accuracy. - Client risk dashboard that protected $5M+ in recurring revenue. Leadership used it to stop churn before it started. - 10-15% reduction in false positives for Fortune 500 airline and banking clients - Centralized data warehouses that turned week long report cycles into same day delivery  I turn raw data into clear stories. The kind that make executives act and engineers nod."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e06c76b5-7684-4daf-a340-fb1e6b506bef",
+      "name": "Set Variable",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        1216,
+        288
+      ],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "468a03c7-1537-435a-9f98-ce7c58a51c8b",
+              "name": "response",
+              "type": "string",
+              "value": "={{ $json.message.content.proposal }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a5cf1823-c883-461a-bf42-7327ffd2c4a0",
+      "name": "Edit Fields",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        1664,
+        288
+      ],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "query"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        1040,
+        288
+      ],
+      "id": "90d26b66-a450-4de9-8b67-826b1cffe3ae",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "openai/gpt-oss-20b",
+          "mode": "id"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a helpful, intelligent Upwork job proposal writer.",
+              "role": "system"
+            },
+            {
+              "content": "=I'm a data analytics specialist applying to jobs on freelance platforms.\n\nYour task is to take as input an Upwork job description and return as output a customized proposal.\n\nHigh-performing proposals are typically templated as follows:\n\n```\nHi,\n\nYou need {desiredOutcome}, and honestly, this is exactly in my wheelhouse. Instead of a standard pitch, I spent some time mapping out the exact architecture for your project.\n\nYou can see the full breakdown and diagram here: $$$\n\nI've helped teams like yours do this before (recently {recentWin}).\n\nIf the doc makes sense to you, drop me a message and we can jump into the weeds.\n```\n\nOutput your results in JSON using this format:\n\n{\"proposal\":\"Your proposal\"}\n\nRules:\n- $$$ is what we're using to replace links later on, so leave that untouched.\n- Write in a casual, spartan tone of voice.\n- Don't use emojis or flowery language.\n- If there's a name included somewhere in the description, add it after \"Hi\"\n\nSome facts about me for the personalization: {{ $json.aboutMe }}"
+            },
+            {
+              "content": "={\"jobDescription\":\"\n{{ $('When Executed by Another Workflow').item.json.query }}\"} "
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "id": "e5b950b0-6e0d-4fdd-9912-f94ebbbbceb9",
+      "name": "LLM",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [
+        1376,
+        288
+      ],
+      "typeVersion": 1.6,
+      "credentials": {
+        "openAiApi": {
+          "id": "kw2yALIoxKYeNCJD",
+          "name": "Together AI API"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Set Variable": {
+      "main": [
+        [
+          {
+            "node": "LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Set Variable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "f92a44b7-6b1b-4372-9d2d-40c53d8a9c57",
+  "meta": {
+    "templateId": "6174",
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d96072bda0a63e983f4bf714e59471b73cbecc90c954cfa02af8488b3cd03f70"
+  },
+  "id": "Y6xNHurnp0YEgEVb",
+  "tags": []
+}
