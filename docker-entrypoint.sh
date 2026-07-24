@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Entry modes for the Upwork crawler container.
 #
-#   cron    (default) run scheduled headless crawls via cron
+#   cron    (default) run scheduled headless crawls + daily health check via cron
 #   login             start a virtual display + VNC so you can log in by hand
+#   listen            long-poll Telegram for the /health command
 #   run  [args]       run a single crawl immediately (headless), passing args
 #
 set -euo pipefail
@@ -35,6 +36,11 @@ case "$MODE" in
   run)
     shift || true
     exec python /app/crawler.py "$@"
+    ;;
+
+  listen)
+    echo "[entrypoint] starting Telegram listener (/health command)"
+    exec python /app/crawler.py --listen
     ;;
 
   cron)

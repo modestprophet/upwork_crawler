@@ -1,7 +1,7 @@
 # Upwork Crawler
 
 Monitors Upwork job searches as a **logged-in user**, stores new postings in
-Postgres, and pings Discord — feeding a downstream n8n pipeline that drafts
+Postgres, and pings Telegram — feeding a downstream n8n pipeline that drafts
 proposals. Scraping is done with a self-hosted anti-detect browser
 ([Camoufox](https://camoufox.com)) so there's no third-party scraping service in
 the loop.
@@ -29,7 +29,7 @@ re-challenges. This suits a personal, low-volume cadence.
   (search URLs)  │    → logged-in profile @ /data/profile      │
                  │    → reads window.__NUXT__ job data          │
                  │  save new jobs ──────────────► Postgres      │
-                 │  notify ─────────────────────► Discord       │
+                 │  notify ─────────────────────► Telegram      │
                  └─────────────────────────────────────────────┘
                                     │
                                     ▼
@@ -42,7 +42,7 @@ re-challenges. This suits a personal, low-volume cadence.
   `__NUXT__` state to extract job records.
 - **`crawler.py`** — orchestration: fetch each search URL, dedupe, save, notify.
 - **`data_models.py`** — the `consulting.jobs` SQLAlchemy model.
-- **`notifications.py`** — Discord webhook alerts for new jobs.
+- **`notifications.py`** — Telegram bot alerts for new jobs.
 - **`settings.py`** — config + secrets, pulled from HashiCorp Vault.
 - **`n8n/`** — exported n8n workflows that turn new jobs into draft proposals.
 
@@ -57,8 +57,10 @@ VAULT_ROLE_ID=...
 VAULT_SECRET_ID=...
 ```
 
-Vault paths used: Discord webhook URL, Postgres user/password. Search URLs and
-the DB host live in `settings.py`.
+Vault paths used: Telegram bot token + chat id (`secret/etl/consulting/telegram`,
+keys `bot_token` and `chat_id`) and Postgres user/password. Search URLs and the
+DB host live in `settings.py`. See **[Telegram setup](#telegram-setup)** to
+create the bot and find your chat id.
 
 Runtime env vars (with defaults):
 
@@ -67,6 +69,38 @@ Runtime env vars (with defaults):
 | `PROFILE_DIR`| `/data/profile`  | Persistent Camoufox profile (mount a volume)   |
 | `HEADLESS`   | `true`           | Headless scheduled runs; `--login` overrides   |
 | `GEOIP`      | `false`          | Derive timezone/geo from exit IP (needs DB)    |
+
+## Telegram setup
+
+Job alerts are delivered by a Telegram bot you own. One-time setup:
+
+1. **Create the bot.** In Telegram, open a chat with
+   [@BotFather](https://t.me/BotFather), send `/newbot`, and follow the prompts
+   (give it a name and a username ending in `bot`). BotFather replies with an
+   **HTTP API token** like `123456789:AAExampleTokenStringHere`. Keep it secret.
+2. **Start a chat with your new bot** — search its username, open it, and press
+   **Start** (or send any message). A bot cannot message you until you've
+   messaged it first.
+3. **Find your chat id.** Visit this URL in a browser (paste your token):
+   ```
+   https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates
+   ```
+   In the JSON response, find `"chat":{"id":<number>,...}`. That number is your
+   `chat_id` (it's negative for groups/channels).
+   > To receive alerts in a **group**: add the bot to the group, send a message
+   > mentioning it, then re-check `getUpdates` for the group's (negative) chat id.
+4. **Store both values in Vault** at `secret/etl/consulting/telegram`:
+   ```bash
+   vault kv put secret/etl/consulting/telegram \
+     bot_token='123456789:AAExampleTokenStringHere' \
+     chat_id='123456789'
+   ```
+5. **Test it:**
+   ```bash
+   curl -s "https://api.telegram.org/bot<YOUR_TOKEN>/sendMessage" \
+     -d chat_id=<YOUR_CHAT_ID> -d text="Upwork crawler test ✅"
+   ```
+   You should get the message in Telegram and `{"ok":true,...}` back.
 
 ## Running
 
@@ -94,8 +128,35 @@ docker compose up -d crawler                     # scheduled crawls (cron)
 ```
 python crawler.py             # scheduled-style crawl (headless)
 python crawler.py --login     # open a headful browser to authenticate once
+python crawler.py --health    # verify Upwork login; alert Telegram if logged out
+python crawler.py --listen    # run the Telegram listener (handles /health)
 python crawler.py --dump      # also write raw HTML/JSON to /data/dumps for debugging
 python crawler.py --limit N   # cap jobs fetched per search URL (default 20)
+```
+
+## Health checks
+
+The logged-in session occasionally needs a manual refresh (re-run `--login`).
+Three mechanisms surface a dead session via Telegram:
+
+- **Per-crawl guard** — every scheduled crawl first verifies login; if it's
+  logged out or challenged, it alerts and skips (instead of silently finding
+  nothing).
+- **Daily check** — a cron job at 06:30 runs `--health` and alerts *only* if the
+  session is dead.
+- **On-demand `/health`** — the long-lived `telegram` service (`--listen`)
+  responds to a `/health` command you send in the chat with the current status
+  (it also registers `/health` in Telegram's command menu). Only your configured
+  `chat_id` is honored.
+
+Because the crawler, health check, and listener share one browser profile (which
+Firefox locks to a single instance), a file lock in the `/data` volume
+serializes their launches so they never collide.
+
+Run the listener alongside the crawler:
+
+```bash
+docker compose up -d crawler telegram
 ```
 
 ## Operational notes

@@ -31,9 +31,12 @@ COPY crawler.py settings.py data_models.py notifications.py browser.py ./
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Scheduled headless crawl: every 2 hours from 07:00 to 19:00.
-# Debian cron reads /etc/environment (written by the entrypoint) for env vars.
-RUN echo "0 7-19/2 * * * root cd /app && /usr/local/bin/python /app/crawler.py >> /var/log/cron.log 2>&1" \
+# Scheduled jobs (Debian cron reads /etc/environment, written by the entrypoint):
+#   - crawl every 2 hours from 07:00 to 19:00
+#   - a daily login/health check at 06:30 (alerts Telegram only if logged out)
+RUN printf '%s\n' \
+    "0 7-19/2 * * * root cd /app && /usr/local/bin/python /app/crawler.py >> /var/log/cron.log 2>&1" \
+    "30 6 * * * root cd /app && /usr/local/bin/python /app/crawler.py --health >> /var/log/cron.log 2>&1" \
     > /etc/cron.d/crawler-cron \
     && chmod 0644 /etc/cron.d/crawler-cron \
     && crontab /etc/cron.d/crawler-cron

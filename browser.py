@@ -17,6 +17,7 @@ saving it next to the profile; it is replayed on every launch so the
 User-Agent (which ``cf_clearance`` is bound to) never drifts.
 """
 
+import fcntl
 import json
 import logging
 import time
@@ -37,11 +38,53 @@ PRESET_FILENAME = "fingerprint_preset.json"
 # Heuristic keys that mark a JSON object as an Upwork job record.
 _JOB_ID_KEYS = ("ciphertext", "ciphertextUid", "uid", "jobId", "id", "url")
 
+# Health-check status codes returned by check_login().
+STATUS_OK = "ok"
+STATUS_LOGGED_OUT = "logged_out"
+STATUS_CHALLENGE = "challenge"
+STATUS_BUSY = "busy"
+STATUS_ERROR = "error"
+
+
+class ProfileBusyError(RuntimeError):
+    """Raised when another process is already using the browser profile."""
+
 
 def _profile_dir() -> Path:
     d = Path(settings.PROFILE_DIR)
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+
+@contextmanager
+def _profile_lock(timeout: int = 150) -> Iterator[None]:
+    """Serialize browser launches that share the profile directory.
+
+    Firefox locks a profile to a single instance, and the crawler, the daily
+    health check, and the /health listener may all try to launch against the
+    same (volume-mounted) profile. This flock — on a file in the /data volume —
+    coordinates them across processes *and* containers.
+    """
+    lock_path = _profile_dir().parent / ".browser.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = open(lock_path, "w")
+    deadline = time.time() + timeout
+    while True:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            break
+        except BlockingIOError:
+            if time.time() >= deadline:
+                handle.close()
+                raise ProfileBusyError(
+                    "browser profile is busy (another run/login in progress)"
+                )
+            time.sleep(2)
+    try:
+        yield
+    finally:
+        fcntl.flock(handle, fcntl.LOCK_UN)
+        handle.close()
 
 
 def _load_or_create_preset(create: bool) -> Optional[dict]:
@@ -98,8 +141,9 @@ def _browser(headless: bool, require_preset: bool) -> Iterator[Any]:
     if preset is not None:
         launch_kwargs["fingerprint_preset"] = preset
 
-    with Camoufox(**launch_kwargs) as context:
-        yield context
+    with _profile_lock():
+        with Camoufox(**launch_kwargs) as context:
+            yield context
 
 
 # --------------------------------------------------------------------------- #
@@ -156,6 +200,55 @@ def _has_auth_cookie(context: Any) -> bool:
     names = {c.get("name", "") for c in cookies}
     # Upwork sets these once you're authenticated.
     return bool(names & {"master_access_token", "oauth2_global_js_token", "user_uid"})
+
+
+# --------------------------------------------------------------------------- #
+# Health / login check
+# --------------------------------------------------------------------------- #
+
+# Upwork redirects unauthenticated users to a login URL; these substrings mark it.
+_LOGIN_URL_MARKERS = ("account-security/login", "/ab/account-security", "/login")
+# A page requiring auth — Upwork redirects to login if the session is dead.
+_LOGIN_PROBE_URL = "https://www.upwork.com/nx/find-work/best-matches"
+
+
+def _looks_logged_out(final_url: str, html: str) -> bool:
+    url = (final_url or "").lower()
+    if any(m in url for m in _LOGIN_URL_MARKERS):
+        return True
+    # Login form fields present on the sign-in page.
+    return 'name="login[username]"' in html or 'id="login_password"' in html
+
+
+def check_login() -> tuple[str, str]:
+    """Verify the persistent profile is still logged into Upwork.
+
+    Returns a ``(status, detail)`` tuple where status is one of the module's
+    ``STATUS_*`` constants. Never raises — transient/lock failures map to
+    ``STATUS_BUSY``/``STATUS_ERROR`` so callers don't misreport a live session
+    as logged out.
+    """
+    try:
+        with _browser(headless=True, require_preset=True) as context:
+            page = context.pages[0] if context.pages else context.new_page()
+            page.goto(_LOGIN_PROBE_URL, wait_until="domcontentloaded", timeout=60_000)
+            try:
+                page.wait_for_load_state("networkidle", timeout=15_000)
+            except Exception:
+                pass
+            final_url = page.url
+            html = page.content()
+            cookie_ok = _has_auth_cookie(context)
+    except ProfileBusyError as e:
+        return STATUS_BUSY, str(e)
+    except Exception as e:  # pragma: no cover - defensive
+        return STATUS_ERROR, f"health check failed to launch: {e}"
+
+    if _is_challenged(html):
+        return STATUS_CHALLENGE, "hit a Cloudflare challenge — cf_clearance may be stale"
+    if _looks_logged_out(final_url, html) or not cookie_ok:
+        return STATUS_LOGGED_OUT, f"session appears logged out (landed on {final_url})"
+    return STATUS_OK, "reached the logged-in Find Work page"
 
 
 # --------------------------------------------------------------------------- #

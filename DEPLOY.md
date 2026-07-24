@@ -49,11 +49,15 @@ The profile (cookies + `cf_clearance` + pinned fingerprint) is now saved to the
 ## Run the scheduler
 
 ```bash
-docker compose up -d crawler
+docker compose up -d crawler telegram
 ```
 
-`crawler` runs cron: a headless crawl every 2 hours from 07:00–19:00
-(America/Chicago). Adjust the schedule in the `Dockerfile` (`/etc/cron.d`).
+- `crawler` runs cron: a headless crawl every 2 hours from 07:00–19:00
+  plus a daily login/health check at 06:30 (America/Chicago). Adjust the
+  schedule in the `Dockerfile` (`/etc/cron.d`).
+- `telegram` runs the listener for the on-demand `/health` command. It shares
+  the profile volume with `crawler`; a file lock keeps their browser launches
+  from colliding.
 
 ## Handy commands
 

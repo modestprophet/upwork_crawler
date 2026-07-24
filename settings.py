@@ -15,7 +15,9 @@ VAULT_SECRET_ID = os.environ.get("VAULT_SECRET_ID")
 multipass = hvac.Client(url=VAULT_ADDR)
 multipass.auth.approle.login(VAULT_ROLE_ID, VAULT_SECRET_ID)
 
-DISCORD_WEBHOOK_URL = multipass.read("secret/etl/consulting/discord/webhookurl")["data"]["url"]
+_telegram = multipass.read("secret/etl/consulting/telegram")["data"]
+TELEGRAM_BOT_TOKEN = _telegram["bot_token"]
+TELEGRAM_CHAT_ID = _telegram["chat_id"]
 
 # Persistent Camoufox profile (cookies + cf_clearance + pinned fingerprint).
 # In Docker this should point at a mounted volume so it survives restarts.

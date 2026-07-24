@@ -12,6 +12,20 @@ services:
     environment:
       - PROFILE_DIR=/data/profile
 
+  # Telegram listener: handles the on-demand /health command. Long-lived.
+  telegram:
+    build: .
+    image: upwork-crawler
+    restart: unless-stopped
+    command: ["listen"]
+    volumes:
+      - ./.env:/app/.env
+      - upwork_profile:/data
+    env_file:
+      - .env
+    environment:
+      - PROFILE_DIR=/data/profile
+
   # One-time interactive login over VNC. Not started by `up`; invoke on demand:
   #   docker compose run --rm --service-ports login
   # then open http://<host>:6080/vnc.html, sign in, and press ENTER in the terminal.
