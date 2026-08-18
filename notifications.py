@@ -74,26 +74,59 @@ def send_telegram_message(text):
         print(f"Error sending Telegram notification: {e}")
 
 
-def send_health_report(status, detail):
-    """Send a Telegram message describing the crawler's login/health status.
+def send_health_report(status, detail, db_ok, db_detail):
+    """Send a Telegram message covering both halves of the pipeline.
 
-    ``status`` is one of the ``browser.STATUS_*`` codes; ``detail`` is a short
-    human-readable explanation.
+    A crawl needs the Upwork session *and* the database, so the report always
+    names both — a green line for one must never be mistaken for overall health.
+
+    Args:
+        status: One of the ``browser.STATUS_*`` codes.
+        detail: Short human-readable explanation of the browser status.
+        db_ok: Whether Postgres was reachable and queryable.
+        db_detail: Explanation of the database result (on success, this reports
+            how long ago the newest job landed).
     """
     detail = html.escape(detail or "")
+    db_detail = html.escape(db_detail or "")
+
     if status == "ok":
-        text = f"✅ <b>Upwork crawler health</b>\nLogged in and reachable.\n<i>{detail}</i>"
+        browser_line = f"✅ <b>Upwork session:</b> logged in\n   <i>{detail}</i>"
     elif status in ("logged_out", "challenge"):
-        text = (
-            "🚨 <b>Upwork crawler: NOT logged in</b>\n"
-            f"<i>{detail}</i>\n\n"
-            "Re-run the login bootstrap to refresh the session:\n"
+        browser_line = f"🚨 <b>Upwork session:</b> NOT logged in\n   <i>{detail}</i>"
+    elif status == "busy":
+        browser_line = f"⏳ <b>Upwork session:</b> not checked — browser busy\n   <i>{detail}</i>"
+    else:  # error
+        browser_line = f"⚠️ <b>Upwork session:</b> check errored\n   <i>{detail}</i>"
+
+    if db_ok:
+        db_line = f"✅ <b>Database:</b> reachable\n   <i>{db_detail}</i>"
+    else:
+        db_line = f"🚨 <b>Database:</b> UNREACHABLE\n   <i>{db_detail}</i>"
+
+    # Headline reflects the worst of the two.
+    if status in ("logged_out", "challenge") or not db_ok:
+        headline = "🚨 <b>Upwork crawler: DEGRADED</b>"
+    elif status == "ok" and db_ok:
+        headline = "✅ <b>Upwork crawler health</b>"
+    else:
+        headline = "⚠️ <b>Upwork crawler health</b>"
+
+    remedies = []
+    if status in ("logged_out", "challenge"):
+        remedies.append(
+            "Refresh the Upwork session:\n"
             "<code>docker compose run --rm --service-ports login</code>"
         )
-    elif status == "busy":
-        text = f"⏳ <b>Upwork crawler health</b>\nCouldn't check — browser busy.\n<i>{detail}</i>"
-    else:  # error
-        text = f"⚠️ <b>Upwork crawler health</b>\nCheck errored.\n<i>{detail}</i>"
+    if not db_ok:
+        remedies.append(
+            "Check the database host — crawls are being dropped until it returns. "
+            "It does not need a crawler restart once it is back."
+        )
+
+    text = f"{headline}\n\n{browser_line}\n{db_line}"
+    if remedies:
+        text += "\n\n" + "\n\n".join(remedies)
     send_telegram_message(text)
 
 

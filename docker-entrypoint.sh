@@ -5,6 +5,8 @@
 #   login             start a virtual display + VNC so you can log in by hand
 #   listen            long-poll Telegram for the /health command
 #   run  [args]       run a single crawl immediately (headless), passing args
+#   debug [args]      like `run`, but headful on a VNC-visible display, so you
+#                     can watch the page (Turnstile, redirects) as it loads
 #
 set -euo pipefail
 
@@ -35,6 +37,19 @@ case "$MODE" in
 
   run)
     shift || true
+    exec python /app/crawler.py "$@"
+    ;;
+
+  debug)
+    # Watch a real crawl render. HEADLESS is honored by fetch_jobs() only;
+    # check_login() is always headless, so this shows the search page itself.
+    shift || true
+    start_display
+    export HEADLESS=false
+    echo "======================================================================"
+    echo "  Watch at  http://<this-host>:6080/vnc.html  — the browser closes"
+    echo "  when the crawl finishes."
+    echo "======================================================================"
     exec python /app/crawler.py "$@"
     ;;
 

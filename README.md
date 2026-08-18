@@ -136,18 +136,29 @@ python crawler.py --limit N   # cap jobs fetched per search URL (default 20)
 
 ## Health checks
 
-The logged-in session occasionally needs a manual refresh (re-run `--login`).
-Three mechanisms surface a dead session via Telegram:
+A crawl needs two things to work: a live Upwork session (which occasionally
+needs a manual `--login` refresh) and a reachable Postgres. **Health checks cover
+both**, and every report names both, so one green subsystem can never be mistaken
+for overall health. Three mechanisms surface a problem via Telegram:
 
-- **Per-crawl guard** — every scheduled crawl first verifies login; if it's
-  logged out or challenged, it alerts and skips (instead of silently finding
-  nothing).
-- **Daily check** — a cron job at 06:30 runs `--health` and alerts *only* if the
-  session is dead.
+- **Per-crawl guard** — every scheduled crawl verifies login *and* the database
+  before searching; if either is down it alerts and skips, instead of silently
+  finding nothing. Alerts repeat each run until the problem clears.
+- **Daily check** — a cron job at 06:30 runs `--health` and alerts *only* if
+  something is wrong.
 - **On-demand `/health`** — the long-lived `telegram` service (`--listen`)
   responds to a `/health` command you send in the chat with the current status
   (it also registers `/health` in Telegram's command menu). Only your configured
   `chat_id` is honored.
+
+A healthy database line also reports how long ago the newest job landed
+(`reachable; newest job 2h 5m ago`) — an age that keeps climbing while both
+subsystems are green means the crawl is running but extracting nothing, which
+points at the parser rather than the infrastructure.
+
+All database calls carry a 10 s connect timeout and a 15 s statement timeout, so
+a host that is wedged rather than cleanly down fails loudly instead of hanging
+the crawl and the Telegram listener.
 
 You can also trigger a crawl from Telegram with **`/search`** (handled by the
 same `telegram` listener): it runs a search immediately, posts any new jobs, and
@@ -159,6 +170,14 @@ search for just those terms instead. Only your configured `chat_id` is honored.
 Because the crawler, health check, and listener share one browser profile (which
 Firefox locks to a single instance), a file lock in the `/data` volume
 serializes their launches so they never collide.
+
+> **These checks cover the browser only, not Postgres.** A crawl that can't
+> reach the database logs the error and returns quietly, so a dead DB looks like
+> "no new jobs" while health checks stay green. See
+> [Troubleshooting: green health checks but no new jobs](DEPLOY.md#troubleshooting-green-health-checks-but-no-new-jobs),
+> and [Inspecting the browser in a running deployment](DEPLOY.md#inspecting-the-browser-in-a-running-deployment)
+> for how to examine the live session (there is no browser process to attach to
+> between runs).
 
 Run the listener alongside the crawler:
 
