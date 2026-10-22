@@ -5,3 +5,5 @@
 __pycache__/
 state.json
 debug/
+dumps/
+.claude/

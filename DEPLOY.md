@@ -261,12 +261,23 @@ Verify the database host is actually *serving*, not merely powered on.
 
 ## Tuning the parser (first live run)
 
-The extractor (`browser.py`) locates the job list by scanning the JSON responses
-Upwork's search page fetches — it looks for the largest list of objects that have
-a `title` plus an id/`ciphertext`/`url`. This is resilient to minor API changes,
-but if Upwork returns an unexpected shape and you get **0 jobs**, run with
-`--dump` and inspect `/data/dumps/responses.json` to confirm the field names,
-then adjust `_looks_like_job` / `_normalize_job`.
+The extractor (`browser.py`) reads the job list from the server-rendered Nuxt
+state. Since Upwork's September 2026 move to Nuxt 3 that state lives in a
+`<script type="application/json" id="__NUXT_DATA__">` tag, serialized with
+`devalue` (a flat array of values that reference each other by index);
+`_devalue_parse` rebuilds the object graph and `_nuxt_data_jobs` picks the
+list whose items carry `ciphertext` + `title`. The older `window.__NUXT__`
+read and the XHR JSON scan remain as fallbacks. If you get **0 jobs**, run
+with `--dump` and check `/data/dumps/page.html`:
+
+```bash
+grep -c 'data-test="JobTile"' /data/dumps/page.html   # tiles rendered?
+grep -c '__NUXT_DATA__' /data/dumps/page.html          # payload present?
+```
+
+Tiles present but 0 jobs means the payload's shape moved; decode it with
+`_devalue_parse` on the saved HTML (it needs no browser) and look at what
+`_looks_like_job` / `_normalize_job` are being handed.
 
 ## What changed from the Apify version
 

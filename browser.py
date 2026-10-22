@@ -20,6 +20,7 @@ User-Agent (which ``cf_clearance`` is bound to) never drifts.
 import fcntl
 import json
 import logging
+import re
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -280,6 +281,87 @@ def check_login(dump_dir: Optional[Path] = None) -> tuple[str, str]:
 # --------------------------------------------------------------------------- #
 
 
+# Nuxt 3 serializes its SSR payload with `devalue`: a flat JSON array where
+# entry 0 is the root and every number *inside* an object or array is an index
+# into the same array (a number at the top level is a plain literal). Negative
+# indexes are sentinels; tagged arrays like ["Reactive", 12] wrap a value.
+_NUXT_DATA_RE = re.compile(
+    r'<script[^>]*id="__NUXT_DATA__"[^>]*>(.*?)</script>', re.S
+)
+_DEVALUE_SENTINELS = {-1: None, -2: None, -3: float("nan"),
+                      -4: float("inf"), -5: float("-inf"), -6: -0.0}
+
+
+def _devalue_parse(flat: list) -> Any:
+    """Rebuild the object graph from a devalue-flattened array."""
+    memo: dict[int, Any] = {}
+
+    def hydrate(i: Any) -> Any:
+        if not isinstance(i, int) or isinstance(i, bool):
+            return i
+        if i < 0:
+            return _DEVALUE_SENTINELS.get(i)
+        if i in memo:
+            return memo[i]
+        v = flat[i]
+        if isinstance(v, list):
+            if v and isinstance(v[0], str):
+                tag, *args = v
+                if tag in ("Set", "Map", "Object", "null"):
+                    out: Any = [hydrate(a) for a in args]
+                    if tag == "Map":
+                        out = dict(zip(out[::2], out[1::2]))
+                    memo[i] = out
+                    return out
+                if tag in ("Date", "BigInt", "RegExp"):
+                    memo[i] = args[0] if args else None
+                    return memo[i]
+                # Ref / ShallowRef / Reactive / ShallowReactive / NuxtError and
+                # any app-defined reducer wrap a single value.
+                memo[i] = hydrate(args[0]) if args else None
+                return memo[i]
+            out = []
+            memo[i] = out
+            out.extend(hydrate(x) for x in v)
+            return out
+        if isinstance(v, dict):
+            out = {}
+            memo[i] = out
+            for k, x in v.items():
+                out[k] = hydrate(x)
+            return out
+        memo[i] = v
+        return v
+
+    return hydrate(0)
+
+
+def _nuxt_data_jobs(html: str) -> list[dict]:
+    """Pull the job list out of the Nuxt 3 ``__NUXT_DATA__`` payload.
+
+    Upwork moved the search page to Nuxt 3 in September 2026. ``window.__NUXT__``
+    now holds only runtime config; the server-rendered state (including the
+    search results, with the same ``ciphertext``/``title``/``amount``/
+    ``hourlyBudget`` fields as before) is in a ``<script type="application/json"
+    id="__NUXT_DATA__">`` tag. Parsing it from the HTML is deterministic and
+    works on a saved dump, so it is preferred over reading live page state.
+    """
+    m = _NUXT_DATA_RE.search(html)
+    if not m:
+        return []
+    try:
+        root = _devalue_parse(json.loads(m.group(1)))
+    except (ValueError, IndexError, RecursionError) as e:
+        logger.warning("Could not decode __NUXT_DATA__: %s", e)
+        return []
+    groups: list[list] = []
+    _flatten_candidate_lists(root, groups)
+    groups = [g for g in groups if all("ciphertext" in x for x in g)]
+    if not groups:
+        return []
+    return max(groups, key=len)
+
+
 def _flatten_candidate_lists(node: Any, out: list) -> None:
     """Recursively collect lists-of-dicts that look like job records."""
     if isinstance(node, list):
@@ -347,12 +429,12 @@ def _normalize_job(job: dict) -> Optional[dict]:
 def fetch_jobs(url: str, limit: int, dump_dir: Optional[Path] = None) -> list[dict]:
     """Fetch jobs for one Upwork search URL using the logged-in profile.
 
-    Upwork server-renders the first page of results into the page's ``__NUXT__``
-    state (a minified JS blob with de-duplicated variable refs, so it can't be
-    text-parsed reliably). We let the live browser resolve it by reading
-    ``window.__NUXT__`` via ``page.evaluate`` and pulling the job array. The
-    XHR/JSON scan is kept as a fallback. If ``dump_dir`` is given, the raw HTML
-    and JSON responses are written there for debugging.
+    Upwork server-renders the first page of results into the page. Sources are
+    tried in order: the legacy Nuxt 2 ``window.__NUXT__`` state (read live via
+    ``page.evaluate``), the Nuxt 3 ``__NUXT_DATA__`` script tag (decoded from
+    the HTML by ``_nuxt_data_jobs``), and finally any job-like list in the
+    captured XHR JSON. If ``dump_dir`` is given, the raw HTML and JSON
+    responses are written there for debugging.
     """
     captured: list[Any] = []
 
@@ -382,6 +464,11 @@ def fetch_jobs(url: str, limit: int, dump_dir: Optional[Path] = None) -> list[di
             logger.warning("Could not read __NUXT__ state: %s", e)
         html = page.content()
 
+    if not nuxt_jobs:
+        nuxt_jobs = _nuxt_data_jobs(html)
+        if nuxt_jobs:
+            logger.info("Read %d jobs from __NUXT_DATA__ payload.", len(nuxt_jobs))
+
     if dump_dir is not None:
         dump_dir.mkdir(parents=True, exist_ok=True)
         (dump_dir / "page.html").write_text(html)
@@ -398,12 +485,13 @@ def fetch_jobs(url: str, limit: int, dump_dir: Optional[Path] = None) -> list[di
             "expired. Re-run `--login` to refresh cf_clearance."
         )
 
-    # Primary source: __NUXT__ jobs. Fallback: any job-like list in the XHR JSON.
+    # Primary source: Nuxt state (either flavor). Fallback: any job-like list
+    # in the XHR JSON.
     raw_groups: list[list] = []
     if nuxt_jobs:
         raw_groups.append(nuxt_jobs)
     else:
-        logger.info("No __NUXT__ jobs found; falling back to XHR JSON scan.")
+        logger.info("No Nuxt job state found; falling back to XHR JSON scan.")
         for blob in captured:
             _flatten_candidate_lists(blob, raw_groups)
         raw_groups.sort(key=len, reverse=True)
